@@ -115,8 +115,25 @@ class VFSGuestFS(vfs.VFS):
             else:
                 raise
 
+        if self.imgfile.startswith('rbd:'):
+            rbd_data = self.imgfile.split(':')
+            drive_opts = {
+                'protocol': rbd_data[0],
+                'filename': rbd_data[1],
+                'format': 'raw',
+            }
+
+            for opt in rbd_data:
+                if opt.startswith('id='):
+                    drive_opts['username'] = opt.partition('id=')[2]
+        else:
+            drive_opts = {
+                'filename': self.imgfile,
+                'format': self.imgfmt,
+            }
+
         try:
-            self.handle.add_drive_opts(self.imgfile, format=self.imgfmt)
+            self.handle.add_drive_opts(**drive_opts)
             self.handle.launch()
 
             self.setup_os()
@@ -128,8 +145,8 @@ class VFSGuestFS(vfs.VFS):
             # close() is not enough
             self.teardown()
             raise exception.NovaException(
-                _("Error mounting %(imgfile)s with libguestfs (%(e)s)") %
-                {'imgfile': self.imgfile, 'e': e})
+                _("Error mounting %(drive_opts)s with libguestfs (%(e)s)") %
+                {'drive_opts': drive_opts, 'e': e})
         except Exception:
             # explicitly teardown instead of implicit close()
             # to prevent orphaned VMs in cases when an implicit
